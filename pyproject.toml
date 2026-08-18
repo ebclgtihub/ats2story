@@ -1,0 +1,42 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ats2story"
+version = "1.0.2"
+description = "Konverter imc Content Studio (.ats) -> Articulate Storyline (.story)"
+readme = "README_ats2story.md"
+requires-python = ">=3.10"
+license = { text = "Proprietary" }
+dependencies = [
+    "pywebview",   # Desktop-App-Shell (Import-Name: webview)
+    "Pillow",      # Bildverarbeitung (Import-Name: PIL)
+    "defusedxml",  # XXE-/Billion-Laughs-Schutz beim .ats-XML-Parsen
+    "lameenc",     # WAV -> MP3 Transkodierung
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "pytest-cov",
+]
+
+[tool.setuptools]
+# Nur das ats2story-Paket ausliefern; lose Top-Level-Skripte bleiben außen vor.
+packages = [
+    "ats2story",
+    "ats2story.ats_reader",
+    "ats2story.media",
+    "ats2story.ocr",
+    "ats2story.richtext",
+    "ats2story.story_writer",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "unit: schnelle, isolierte Einheiten-Tests",
+    "integration: Tests gegen echte Vorlagen/Fixtures",
+    "regression: End-to-End-Regressionen gegen bekannte Eingaben",
+]

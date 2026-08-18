@@ -1,0 +1,155 @@
+# Windows-Build des ATS → Storyline Converters (PyInstaller, .exe-Ordner).
+#
+# Das Storyline-Grundgerüst (ats2story/assets/skeleton.story) liegt im Repo —
+# keine externe Vorlage nötig. Tesseract-Sprachdaten (deu/pol) werden im
+# tessdata-Stufungsschritt geladen.
+#
+# Ergebnis: dist/ATS Converter/  (enthält "ATS Converter.exe") → als Artefakt hochgeladen.
+
+name: build-windows
+
+permissions:
+  contents: write           # nötig, um Release-Dateien anzuhängen
+
+on:
+  workflow_dispatch:        # manuell auslösbar
+  push:
+    tags: ['v*']
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Python-Abhängigkeiten
+        run: |
+          python -m pip install --upgrade pip
+          pip install pywebview Pillow defusedxml lameenc pyinstaller
+
+      - name: Tesseract installieren (UB Mannheim via choco)
+        run: choco install tesseract --no-progress -y
+
+      - name: Tesseract in PATH aufnehmen
+        shell: pwsh
+        run: Add-Content $env:GITHUB_PATH 'C:\Program Files\Tesseract-OCR'
+
+      # deu/pol aus tessdata_best (bessere Erkennung, Engine-Timeout dafür
+      # erhöht); eng aus der Installation. Kein osd (psm 3 braucht kein OSD).
+      - name: tessdata vorstufen (deu/pol best + eng)
+        shell: pwsh
+        run: |
+          $stage = "packaging\_tessdata_stage"
+          New-Item -ItemType Directory -Force -Path $stage | Out-Null
+          $tess = "C:\Program Files\Tesseract-OCR\tessdata"
+          Copy-Item "$tess\eng.traineddata" $stage -ErrorAction SilentlyContinue
+          foreach ($l in @('deu','pol')) {
+            curl.exe -fL -o "$stage\$l.traineddata" `
+              "https://github.com/tesseract-ocr/tessdata_best/raw/main/$l.traineddata"
+          }
+          Get-ChildItem $stage
+
+      - name: PyInstaller-Build
+        run: python -m PyInstaller --noconfirm --clean packaging/build.spec
+
+      # PyInstaller 6 legt die Beigaben unter _internal/ ab, ältere Fassungen
+      # direkt ins Wurzelverzeichnis. Deshalb rekursiv suchen statt einen
+      # festen Pfad anzunehmen.
+      - name: Nachweis — Tesseract samt DLLs und Sprachdaten im Paket
+        shell: pwsh
+        run: |
+          $root = "dist\ATS Converter"
+          $exe = Get-ChildItem $root -Recurse -Filter tesseract.exe -ErrorAction SilentlyContinue |
+                 Select-Object -First 1
+          if (-not $exe) { throw "tesseract.exe fehlt im Paket" }
+          Write-Host "gefunden: $($exe.FullName)"
+          $dll = (Get-ChildItem $exe.DirectoryName -Filter *.dll -ErrorAction SilentlyContinue).Count
+          if ($dll -lt 1) { throw "keine DLLs neben tesseract.exe — die App startet dort nicht" }
+          Write-Host "DLLs daneben: $dll"
+          $lang = Get-ChildItem $root -Recurse -Filter *.traineddata -ErrorAction SilentlyContinue
+          if ($lang.Count -lt 2) { throw "Sprachdaten fehlen (nur $($lang.Count) gefunden)" }
+          $lang | ForEach-Object { Write-Host "  $($_.Name)" }
+          # pywebview zeigt sein Fenster auf Windows über .NET. Fehlt
+          # Python.Runtime.dll, startet die App mit
+          # „Failed to resolve Python.Runtime.Loader.Initialize" — genau so
+          # ist v1.0.0 beim ersten Versuch gescheitert.
+          $rt = Get-ChildItem $root -Recurse -Filter Python.Runtime.dll -ErrorAction SilentlyContinue
+          if (-not $rt) { throw "Python.Runtime.dll fehlt — die App startet nicht" }
+          Write-Host "gefunden: $($rt[0].FullName)"
+
+      # Startprobe: die App ohne Fenster hochfahren und sofort beenden. Fängt
+      # genau die Fehler, die erst beim Benutzer auftauchen — fehlende DLLs,
+      # kaputte Importe.
+      - name: Startprobe
+        shell: pwsh
+        run: |
+          $exe = "dist\ATS Converter\ATS Converter.exe"
+          $p = Start-Process -FilePath $exe -PassThru
+          Start-Sleep -Seconds 25
+          if ($p.HasExited) {
+            throw "App hat sich nach $($p.ExitTime - $p.StartTime) selbst beendet (Code $($p.ExitCode))"
+          }
+          Write-Host "App läuft nach 25 s noch — Start in Ordnung"
+          Stop-Process -Id $p.Id -Force
+
+      - name: Artefakt hochladen
+        uses: actions/upload-artifact@v4
+        with:
+          name: ATS-Converter-Windows
+          path: dist/ATS Converter/
+
+      # Ein Installationsprogramm statt eines ZIP-Ordners: doppelklicken,
+      # weiterklicken, fertig — mit Startmenü-Eintrag und Deinstallation.
+      # Der entpackte Ordner bleibt zusätzlich als Artefakt erhalten, für alle,
+      # die lieber nichts installieren.
+      - name: Inno Setup bereitstellen
+        if: startsWith(github.ref, 'refs/tags/')
+        run: choco install innosetup --no-progress -y
+
+      - name: Installationsprogramm bauen
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: pwsh
+        run: |
+          $v = "${{ github.ref_name }}" -replace '^v',''
+          @"
+          [Setup]
+          AppName=ATS Converter
+          AppVersion=$v
+          AppPublisher=EBCL
+          DefaultDirName={autopf}\ATS Converter
+          DefaultGroupName=ATS Converter
+          OutputDir=.
+          OutputBaseFilename=ATS-Converter-Setup
+          Compression=lzma2/max
+          SolidCompression=yes
+          ArchitecturesInstallIn64BitMode=x64compatible
+          PrivilegesRequiredOverridesAllowed=dialog
+          [Files]
+          Source: "dist\ATS Converter\*"; DestDir: "{app}"; Flags: recursesubdirs createallsubdirs ignoreversion
+          [Icons]
+          Name: "{group}\ATS Converter"; Filename: "{app}\ATS Converter.exe"
+          Name: "{autodesktop}\ATS Converter"; Filename: "{app}\ATS Converter.exe"; Tasks: desktopicon
+          [Tasks]
+          Name: desktopicon; Description: "Verknüpfung auf dem Desktop anlegen"; GroupDescription: "Zusätzlich:"
+          [Run]
+          Filename: "{app}\ATS Converter.exe"; Description: "ATS Converter starten"; Flags: nowait postinstall skipifsilent
+          "@ | Set-Content -Encoding UTF8 setup.iss
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" setup.iss
+          Get-ChildItem ATS-Converter-Setup.exe
+
+      - name: Portable Fassung packen
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: pwsh
+        run: Compress-Archive -Path "dist\ATS Converter\*" -DestinationPath "ATS-Converter-Windows-portabel.zip"
+
+      - name: Release-Datei anhängen
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            ATS-Converter-Setup.exe
+            ATS-Converter-Windows-portabel.zip

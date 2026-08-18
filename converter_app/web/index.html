@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="de" data-theme="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ATS → Storyline Converter</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="logo" aria-hidden="true">A→S</span>
+      <div class="brand-text">
+        <h1>ATS&nbsp;→&nbsp;Storyline</h1>
+        <p class="sub">imc&nbsp;Content&nbsp;Studio in Articulate&nbsp;Storyline umwandeln</p>
+      </div>
+    </div>
+    <div class="topbar-right">
+      <button class="icon-btn" id="btnTheme" aria-label="Hell/Dunkel umschalten" title="Hell/Dunkel umschalten">☾</button>
+    </div>
+  </header>
+
+  <!-- Startfläche: Klick öffnet den Dateidialog — kein Drag&Drop, siehe
+       Hinweis im Docstring von converter_app/app.py -->
+  <main class="opener" id="opener">
+    <div class="op-inner">
+      <p class="op-dim">imc&nbsp;Content&nbsp;Studio&nbsp;&nbsp;→&nbsp;&nbsp;Articulate&nbsp;Storyline</p>
+      <h2>Kurs öffnen</h2>
+      <p>Wähle eine <strong>.ats</strong>-Datei. Du siehst danach jede Folie,
+         bevor du exportierst.</p>
+      <button class="primary" id="btnPick">Kurs wählen…</button>
+      <p class="hint" id="ocrHint"></p>
+    </div>
+  </main>
+
+  <!-- Arbeitsansicht: Einstellungen oben, Inhaltsbaum links, Bühne in der Mitte -->
+  <div class="work hidden" id="work">
+
+    <section class="settings" aria-label="Kurs und Einstellungen">
+      <div class="set-row set-file">
+        <span class="cb-file" id="fileName">—</span>
+        <span class="cb-stats">
+          <span class="stat"><b id="badgeSlides">0</b>Folien</span>
+          <span class="stat"><b id="badgeScenes">0</b>Szenen</span>
+          <span class="stat" id="statCanvas" hidden></span>
+        </span>
+        <button class="link" id="btnPick2">Anderen Kurs wählen</button>
+        <div class="set-export">
+          <button class="primary" id="btnExport">Als .story exportieren</button>
+        </div>
+      </div>
+
+      <div class="set-row set-opts">
+        <div class="opt-group">
+          <span class="opt-label">Inhalt</span>
+          <label class="chip" title="Text-Bilder per OCR in echte, bearbeitbare Textboxen umwandeln">
+            <input type="checkbox" id="optOcr" checked><span>Text editierbar</span></label>
+          <div class="field inline" id="langField">
+            <select id="optLang" aria-label="Sprache der Texterkennung">
+              <option value="deu">Deutsch</option>
+              <option value="pol">Polnisch</option>
+              <option value="eng">Englisch</option>
+            </select>
+          </div>
+          <span class="opt-warn hidden" id="ocrWarn"></span>
+          <label class="chip" title="Sprecher-Aufnahmen mit übernehmen">
+            <input type="checkbox" id="optAudio" checked><span>Audio</span></label>
+        </div>
+
+        <div class="opt-group">
+          <span class="opt-label">Hintergrund</span>
+          <label class="chip" title="Hintergrundbild des imc-Kurses als unterste, löschbare Ebene je Folie">
+            <input type="checkbox" id="optCourseBg" checked><span>Kurs-Hintergrund</span></label>
+          <label class="chip" title="Vorlagen-Hintergrund (Europakarte etc.) durch Weiß ersetzen">
+            <input type="checkbox" id="optCleanBg" checked><span>säubern</span></label>
+        </div>
+
+        <div class="opt-group">
+          <span class="opt-label">Folien</span>
+          <div class="field inline">
+            <select id="optGeometry" aria-label="Foliengröße">
+              <option value="native">Original 1:1</option>
+              <option value="fit" selected>Einpassen (16:9)</option>
+              <option value="fill">Bühne füllen</option>
+            </select>
+          </div>
+          <label class="chip" title="Alle Folien in eine Szene — sicherstes Öffnen in Storyline">
+            <input type="checkbox" id="optSingle"><span>Eine Szene</span></label>
+          <label class="chip" title="Platzhalterfolien der imc-Prüfungen weglassen">
+            <input type="checkbox" id="optNoExams" checked><span>Prüfungen weglassen</span></label>
+        </div>
+
+        <div class="opt-group is-quiz">
+          <span class="opt-label">Fragen</span>
+          <label class="chip" title="Fragen aus dem imc-Depot als echte Storyline-Fragenbank in die .story legen">
+            <input type="checkbox" id="optQuizBank" checked><span>Fragenbank</span></label>
+          <div class="field inline">
+            <select id="optQuizFont" aria-label="Schriftgröße der Fragen">
+              <option value="14">Klein</option>
+              <option value="18.5" selected>Normal</option>
+              <option value="24">Groß</option>
+            </select>
+          </div>
+          <label class="chip" title="Zusätzlich als Excel/Text neben der .story — für den Import in ein anderes Projekt">
+            <input type="checkbox" id="optQuizExport"><span>auch als Excel</span></label>
+          <label class="chip" title="Zusätzlich eine statische Abbildung je Frage in der .story">
+            <input type="checkbox" id="optQuizSlides"><span>auch als Folien</span></label>
+        </div>
+      </div>
+
+      <div class="progress hidden" id="progressWrap">
+        <div class="bar"><div class="fill" id="progFill"></div></div>
+        <p class="progmsg" id="progMsg">…</p>
+      </div>
+    </section>
+
+    <div class="body">
+      <!-- Inhaltsbaum: Kapitel mit Folien, danach das Depot mit den Fragen -->
+      <nav class="nav" id="nav" aria-label="Inhalt des Kurses"></nav>
+
+      <!-- Bühne: die ausgewählte Folie groß -->
+      <section class="stage" id="stage" aria-label="Vorschau">
+        <div class="stage-frame">
+          <img id="stageImg" alt="">
+          <div class="stage-empty" id="stageEmpty">Eintrag links wählen</div>
+        </div>
+        <div class="stage-bar">
+          <button class="icon-btn" id="stagePrev" aria-label="Vorherige Folie">‹</button>
+          <span class="stage-cap" id="stageCap">—</span>
+          <button class="icon-btn" id="stageZoom" aria-label="Großansicht" title="Großansicht">⤢</button>
+          <button class="icon-btn" id="stageNext" aria-label="Nächste Folie">›</button>
+        </div>
+        <div class="result hidden" id="result"></div>
+      </section>
+    </div>
+  </div>
+
+  <!-- Großansicht -->
+  <div class="lightbox hidden" id="lightbox">
+    <button class="lb-btn lb-close" id="lbClose" aria-label="Schließen">✕</button>
+    <button class="lb-btn lb-prev" id="lbPrev" aria-label="Vorherige Folie">‹</button>
+    <img id="lbImg" alt="">
+    <button class="lb-btn lb-next" id="lbNext" aria-label="Nächste Folie">›</button>
+    <div class="lb-cap" id="lbCap"></div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
