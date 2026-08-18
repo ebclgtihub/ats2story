@@ -1,0 +1,464 @@
+/* ═════════════════════════════════════════════════════════ Gestaltung
+   Gegenstand: ein Kurs ist ein STAPEL — feste Proportion 1024×748,
+   wiederholt, in Kapitel gruppiert. Das zweite Material dieses Werkzeugs
+   ist die MESSUNG: es meldet Maße, Folienzahlen, Dauern.
+
+   Daraus zwei Entscheidungen:
+   · Sobald ein Kurs offen ist, gehört das Fenster den Folien.
+   · Alle Zahlen stehen in Monospace mit Tabellenziffern — Zählungen
+     springen dadurch beim Aktualisieren nicht.
+
+   Kräftig wird es an genau EINER Stelle: der Kursleiste.
+   ═══════════════════════════════════════════════════════════════════ */
+:root{
+  --paper:#eef1f4;         /* kühles Papier   */
+  --card:#ffffff;
+  --sunk:#f4f6f8;
+  --rule:#dce1e7;          /* Haarlinie       */
+  --rule-firm:#c3cbd4;
+  --ink:#101720;           /* blaustichiges Fast-Schwarz */
+  --ink-soft:#5d6873;
+  --mark:#1f5fa8;          /* Arbeitsblau, aus der Kurswelt selbst */
+  --mark-deep:#164a86;
+  --mark-wash:rgba(31,95,168,.08);
+  --quiz:#a2551a;          /* der EINE warme Ton — nur in der Kursleiste */
+  --on-mark:#ffffff;
+  --ok:#1c6b48; --ok-wash:rgba(28,107,72,.09);
+  --warn:#8a5a12;
+  --err:#a8342f; --err-wash:rgba(168,52,47,.08);
+
+  --lift-1:0 1px 2px rgba(16,23,32,.05);
+  --lift-2:0 2px 8px rgba(16,23,32,.08);
+  --lift-3:0 12px 32px rgba(16,23,32,.16);
+
+  --r:9px; --r-sm:6px; --r-lg:14px;
+  --rail:328px;
+  --slide-ratio:1024/748;   /* die echte Proportion des Gegenstands */
+
+  --ui:-apple-system,"Segoe UI",Roboto,system-ui,sans-serif;
+  --num:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;
+}
+html[data-theme="dark"]{
+  --paper:#0e1319;
+  --card:#161c24;
+  --sunk:#1b222b;
+  --rule:#26303a;
+  --rule-firm:#39434f;
+  --ink:#e4e9ee;
+  --ink-soft:#8e9aa6;
+  --mark:#6ea8e8;
+  --mark-deep:#8bbcf2;
+  --mark-wash:rgba(110,168,232,.14);
+  --quiz:#d08a4d;
+  --on-mark:#0e1319;
+  --ok:#4fb187; --ok-wash:rgba(79,177,135,.13);
+  --warn:#d0a054;
+  --err:#e07b76; --err-wash:rgba(224,123,118,.13);
+  --lift-1:0 1px 2px rgba(0,0,0,.4);
+  --lift-2:0 2px 8px rgba(0,0,0,.45);
+  --lift-3:0 14px 36px rgba(0,0,0,.55);
+}
+
+/* ═══════════════════════════════════════════════════════════ Grundlage */
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{
+  /* inset:0 statt height:100% — ein fest positioniertes Element ist IMMER
+     exakt so gross wie das sichtbare Fenster. WKWebView meldet direkt nach
+     dem Start gelegentlich eine falsche Viewporthoehe; frueher hat Python
+     deshalb eine feste Pixelhoehe nachgereicht, die beim naechsten
+     Vergroessern des Fensters als toter Streifen unten stehen blieb. */
+  position:fixed; inset:0;
+  background:var(--paper); color:var(--ink);
+  font:14px/1.55 var(--ui);
+  display:flex; flex-direction:column; overflow:hidden;
+  -webkit-font-smoothing:antialiased;
+}
+.hidden{display:none !important}
+h1,h2,h3,h4{margin:0; letter-spacing:-.011em}
+
+/* Zahlen: Monospace + Tabellenziffern, damit Zählungen beim
+   Aktualisieren nicht springen. */
+.num,.badge,.stat b,.bar-legend{font-family:var(--num); font-variant-numeric:tabular-nums}
+
+button{font:inherit; cursor:pointer; border:none; background:none; color:inherit}
+:focus-visible{outline:2px solid var(--mark); outline-offset:2px; border-radius:5px}
+
+.primary{
+  background:var(--mark); color:var(--on-mark); padding:10px 18px;
+  border-radius:var(--r-sm); font-weight:600; letter-spacing:-.005em;
+  box-shadow:var(--lift-1); transition:background-color .14s, box-shadow .14s;
+}
+.primary:hover{background:var(--mark-deep); box-shadow:var(--lift-2)}
+.primary:active{transform:translateY(.5px)}
+.primary.big{width:100%; padding:13px; font-size:15px; margin-top:14px}
+.primary:disabled{opacity:.5; cursor:default; box-shadow:none}
+.link{color:var(--mark); padding:3px 6px; font-weight:550; border-radius:5px}
+.link:hover{background:var(--mark-wash)}
+
+.icon-btn{
+  display:grid; place-items:center; width:34px; height:34px; font-size:16px;
+  border-radius:var(--r-sm); border:1px solid var(--rule); background:var(--sunk);
+  color:var(--ink-soft); transition:color .14s, border-color .14s;
+}
+.icon-btn:hover{color:var(--mark); border-color:var(--rule-firm)}
+
+/* ═════════════════════════════════════════════════════════════ Kopfbalken */
+.topbar{
+  display:flex; justify-content:space-between; align-items:center; gap:16px;
+  padding:11px 20px; background:var(--card); border-bottom:1px solid var(--rule);
+}
+.brand{display:flex; gap:12px; align-items:center; min-width:0}
+.logo{
+  display:grid; place-items:center; width:32px; height:32px; border-radius:7px;
+  flex-shrink:0; background:var(--ink); color:var(--card);
+  font:600 11px/1 var(--num); letter-spacing:.02em;
+}
+html[data-theme="dark"] .logo{background:var(--mark); color:var(--on-mark)}
+.topbar h1{font-size:15.5px; font-weight:640}
+.sub{margin:1px 0 0; color:var(--ink-soft); font-size:11.5px}
+.topbar-right{display:flex; align-items:center; gap:10px}
+/* Eigene Version klein und unaufdringlich; der Hinweis auf eine neuere
+   Fassung darf auffallen, aber nichts blockieren. */
+.ver{font:11px/1 var(--num); color:var(--ink-soft); letter-spacing:.02em}
+.update{
+  display:inline-flex; align-items:center; gap:6px; cursor:pointer;
+  padding:5px 11px; border-radius:20px; font-size:12px; font-weight:600;
+  color:var(--on-mark); background:var(--mark); box-shadow:var(--lift-1);
+  transition:background-color .14s;
+}
+.update:hover{background:var(--mark-deep)}
+.update::before{content:"↓"; font-family:var(--num)}
+
+/* ══════════════════════════════════════════════════════ Leerer Zustand
+   Kein Ordner-Symbol in einer Box, sondern der Gegenstand selbst: ein
+   Folienrahmen in der echten Proportion 1024:748. Bewusst SOLIDE
+   umrandet — die App kennt kein Drag&Drop (WKWebView liefert beim
+   HTML5-Drop keinen OS-Pfad), ein Drop-Ziel würde also täuschen. */
+.opener{flex:1; display:grid; place-items:center; padding:28px}
+.op-inner{
+  width:min(520px,86vw); aspect-ratio:var(--slide-ratio);
+  display:flex; flex-direction:column; align-items:center; justify-content:center;
+  gap:4px; text-align:center; padding:34px;
+  background:var(--card); border:1px solid var(--rule-firm);
+  border-radius:var(--r-lg); box-shadow:var(--lift-2); position:relative;
+}
+/* Passermarken an allen VIER Ecken — so liest sich die Fläche als Folie im
+   Satzspiegel und nicht als zufälliger Strich. Über ein Pseudo-Element mit
+   vier Farbverläufen, damit kein zusätzliches Markup nötig ist. */
+.op-inner::before{
+  content:""; position:absolute; inset:11px; pointer-events:none; border-radius:4px;
+  background:
+    linear-gradient(var(--rule-firm),var(--rule-firm)) left top/20px 1.5px no-repeat,
+    linear-gradient(var(--rule-firm),var(--rule-firm)) left top/1.5px 20px no-repeat,
+    linear-gradient(var(--rule-firm),var(--rule-firm)) right top/20px 1.5px no-repeat,
+    linear-gradient(var(--rule-firm),var(--rule-firm)) right top/1.5px 20px no-repeat,
+    linear-gradient(var(--rule-firm),var(--rule-firm)) left bottom/20px 1.5px no-repeat,
+    linear-gradient(var(--rule-firm),var(--rule-firm)) left bottom/1.5px 20px no-repeat,
+    linear-gradient(var(--rule-firm),var(--rule-firm)) right bottom/20px 1.5px no-repeat,
+    linear-gradient(var(--rule-firm),var(--rule-firm)) right bottom/1.5px 20px no-repeat;
+}
+.op-dim{
+  font:11px/1 var(--num); color:var(--ink-soft); letter-spacing:.04em;
+  margin-bottom:16px; white-space:nowrap;
+}
+.op-inner h2{font-size:21px; font-weight:640; margin-bottom:5px}
+.op-inner p{color:var(--ink-soft); margin:0 0 22px; max-width:34ch}
+.hint{font-size:11.5px; margin:20px 0 0; color:var(--ink-soft)}
+
+/* ═══════════════════════════════════════════════════════ Arbeitsbereich
+   Drei Zonen: Einstellungen oben, Inhaltsbaum links, Bühne in der Mitte.
+   Der Kurs IST ein Baum (Kapitel > Folien, Depot > Ordner > Fragen) — bei
+   200+ Einträgen trägt ein Navigationsbaum weiter als ein Kachelraster. */
+.work{flex:1; display:flex; flex-direction:column; overflow:hidden}
+
+/* ── Einstellungen (oben) ── */
+.settings{background:var(--card); border-bottom:1px solid var(--rule); padding:11px 20px 12px}
+.set-row{display:flex; align-items:center; gap:14px; flex-wrap:wrap}
+.set-file{margin-bottom:11px}
+.cb-file{font-weight:640; font-size:14px; max-width:38vw;
+  overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+.cb-stats{display:flex; gap:16px; color:var(--ink-soft); font-size:12px; flex-wrap:wrap}
+.stat b{color:var(--ink); font-weight:600; margin-right:4px}
+.set-export{margin-left:auto; display:flex; align-items:center; gap:10px}
+.ghost{
+  padding:9px 14px; border-radius:var(--r-sm); border:1px solid var(--rule-firm);
+  background:var(--sunk); color:var(--ink); font-size:13px; font-weight:550;
+  transition:border-color .12s, background-color .12s;
+}
+.ghost:hover{border-color:var(--mark); color:var(--mark)}
+/* Kurzfassung: was gilt, ohne das Fenster zu öffnen. */
+.set-summary{
+  margin:9px 0 0; font-size:12px; color:var(--ink-soft);
+  display:flex; flex-wrap:wrap; gap:4px 14px;
+}
+.set-summary b{color:var(--ink); font-weight:600}
+.set-summary .off{color:var(--ink-soft); opacity:.75}
+
+/* Optionen als kompakte Schalter — sie müssen oben nebeneinander passen,
+   ohne der Bühne Platz zu nehmen. */
+/* Vier benannte Gruppen statt einer Kette aus elf Schaltern: „Inhalt",
+   „Hintergrund", „Folien", „Fragen". Die Beschriftung sagt, worauf sich der
+   Schalter bezieht — vorher stand „säubern" ohne Bezug neben „Audio". */
+.set-opts{gap:0 18px; padding-top:10px; border-top:1px solid var(--rule)}
+.opt-group{
+  display:flex; align-items:center; gap:7px; flex-wrap:wrap;
+  padding:4px 0 4px 14px; margin:2px 0; border-left:1px solid var(--rule);
+}
+.opt-group:first-child{padding-left:0; border-left:0}
+.opt-label{
+  font-size:10px; font-weight:700; letter-spacing:.08em; text-transform:uppercase;
+  color:var(--ink-soft); margin-right:2px;
+}
+.opt-group.is-quiz .opt-label{color:var(--quiz)}
+.chip{
+  display:inline-flex; align-items:center; gap:7px; cursor:pointer;
+  padding:6px 11px; border:1px solid var(--rule); border-radius:20px;
+  background:var(--sunk); font-size:12.5px;
+  transition:border-color .12s, background-color .12s;
+}
+.chip:hover{border-color:var(--rule-firm)}
+.chip:has(input:checked){border-color:var(--mark); background:var(--mark-wash); color:var(--mark-deep)}
+html[data-theme="dark"] .chip:has(input:checked){color:var(--mark)}
+.chip input{width:14px; height:14px; accent-color:var(--mark); cursor:pointer; margin:0}
+.field.inline{display:inline-flex; align-items:center; gap:7px; margin:0}
+.field.inline label{margin:0; font-size:12px; color:var(--ink-soft); font-weight:550}
+.field.inline select{max-width:11rem}
+.field.inline select{width:auto; padding:6px 9px; font-size:12.5px; border-radius:20px}
+.field.is-disabled{opacity:.42; pointer-events:none}
+.chip:has(input:disabled){opacity:.5; cursor:default}
+.opt-warn{font-size:12px; color:var(--warn); font-weight:550}
+
+.body{flex:1; display:flex; overflow:hidden}
+
+/* ── Inhaltsbaum (links) ── */
+.nav{
+  /* Mitwachsend statt fest: schmale Fenster brauchen die Breite fuer die
+     Buehne, breite duerfen laengere Folientitel ungekuerzt zeigen. */
+  width:clamp(210px, 21vw, 380px);
+  flex-shrink:0; overflow-y:auto; padding:12px 8px 24px;
+  background:var(--card); border-right:1px solid var(--rule);
+}
+.nav-sec{margin-bottom:18px}
+.nav-sec-head{
+  display:flex; align-items:baseline; gap:8px; padding:6px 10px 7px;
+  font-size:10.5px; font-weight:700; letter-spacing:.09em; text-transform:uppercase;
+  color:var(--ink-soft); border-bottom:1px solid var(--rule);
+}
+.nav-sec.is-quiz .nav-sec-head{color:var(--quiz)}
+.nav-n{margin-left:auto; font-size:11.5px; color:var(--ink-soft); font-weight:600}
+.nav-note{
+  margin:8px 10px 10px; font-size:11.5px; line-height:1.45; color:var(--ink-soft);
+  border-left:2px solid var(--quiz); padding-left:9px;
+}
+.nav-group{padding:11px 10px 4px; font-size:12px; font-weight:640; color:var(--ink)}
+.nav-folder{margin:1px 0}
+.nav-folder > summary{
+  display:flex; align-items:baseline; gap:8px; cursor:pointer; list-style:none;
+  padding:6px 10px; border-radius:var(--r-sm); font-size:12.5px; font-weight:550;
+  color:var(--ink-soft);
+}
+.nav-folder > summary::-webkit-details-marker{display:none}
+.nav-folder > summary::before{
+  content:"›"; display:inline-block; width:9px; color:var(--ink-soft);
+  transition:transform .12s;
+}
+.nav-folder[open] > summary::before{transform:rotate(90deg)}
+.nav-folder > summary:hover{background:var(--sunk); color:var(--ink)}
+.nav-folder ul{list-style:none; margin:0 0 4px; padding:0}
+.nav-item{
+  display:flex; align-items:baseline; gap:9px; width:100%; text-align:left;
+  padding:5px 10px 5px 28px; border-radius:var(--r-sm); font-size:12.5px;
+  color:var(--ink); transition:background-color .1s;
+}
+.nav-item:hover{background:var(--sunk)}
+.nav-item.is-sel{background:var(--mark-wash); color:var(--mark-deep); font-weight:600}
+html[data-theme="dark"] .nav-item.is-sel{color:var(--mark)}
+.nav-idx{color:var(--ink-soft); font-size:11px; min-width:2.2em}
+.nav-item.is-sel .nav-idx{color:inherit}
+.nav-name{overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+.nav-tag{
+  margin-left:auto; font:600 10px/1 var(--num); color:var(--quiz);
+  background:rgba(162,85,26,.11); padding:3px 6px; border-radius:4px;
+}
+html[data-theme="dark"] .nav-tag{background:rgba(208,138,77,.16)}
+
+/* ── Bühne (Mitte) ── */
+.stage{
+  flex:1; min-height:0; display:flex; flex-direction:column; align-items:center;
+  padding:20px 24px 16px; overflow-y:auto; gap:14px;
+}
+/* min-height: sonst quetscht das Ergebnisfeld nach dem Export die Folie auf
+   Briefmarkengroesse zusammen — die Buehne scrollt lieber. */
+.stage-frame{flex:1 1 auto; min-height:min(46vh, 340px); width:100%; position:relative}
+/* Der Inhalt liegt ABSOLUT im Rahmen. Nur so hat er eine feste Bezugshoehe:
+   als normales Flex-/Grid-Kind bleibt `max-height:100%` wirkungslos, weil die
+   Rahmenhoehe aus dem Flex-Layout kommt — das Bild richtete sich dann allein
+   nach der Breite, stand unten ueber und wurde abgeschnitten. */
+.stage-frame > *{position:absolute; inset:0; margin:auto}
+/* max-* statt width/height: die Folie wird eingepasst, NIE beschnitten und NIE
+   ueber ihre echte Groesse hinaus aufgeblasen — die imc-Vorschau hat genau
+   Canvas-Aufloesung, mehr Bildinformation gibt es nicht. */
+.stage-frame img{
+  max-width:100%; max-height:100%; width:auto; height:auto;
+  background:#fff; border:1px solid var(--rule);
+  border-radius:var(--r); box-shadow:var(--lift-2);
+}
+.stage-empty{
+  display:grid; place-items:center;
+  color:var(--ink-soft); font-size:13px;
+  background:var(--card); border:1px solid var(--rule);
+  border-radius:var(--r); box-shadow:var(--lift-2);
+}
+.stage-bar{display:flex; align-items:center; gap:12px; width:100%; max-width:1100px}
+.stage-cap{
+  flex:1; text-align:center; font-size:12.5px; color:var(--ink-soft);
+  overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+}
+.icon-btn:disabled{opacity:.35; cursor:default}
+
+/* Fragen: TEXTvorschau statt Bild — Frage und Optionen sagen mehr als das
+   Vorschaubild, und in der .story gibt es dafür ohnehin keine Folie. */
+.stage-text{
+  max-width:var(--slide-w, 1024px);
+  overflow-y:auto; padding:34px 40px;
+  display:flex; flex-direction:column; gap:16px; text-align:left;
+  background:var(--card); border:1px solid var(--rule);
+  border-radius:var(--r); box-shadow:var(--lift-2);
+}
+.q-type{
+  align-self:flex-start; font:600 11px/1 var(--num); color:var(--quiz);
+  background:rgba(162,85,26,.11); padding:5px 10px; border-radius:20px;
+}
+html[data-theme="dark"] .q-type{background:rgba(208,138,77,.16)}
+.q-text{margin:0; font-size:19px; line-height:1.45; font-weight:600; max-width:62ch}
+.q-opts{list-style:none; margin:4px 0 0; padding:0; display:flex;
+  flex-direction:column; gap:2px; max-width:62ch}
+.q-opts li{
+  display:flex; gap:12px; align-items:baseline; padding:9px 12px;
+  border-radius:var(--r-sm); background:var(--sunk); font-size:14px;
+}
+.q-opts li.is-correct{background:var(--ok-wash); font-weight:600}
+.q-opts.is-seq li.is-correct{background:var(--sunk); font-weight:500}
+.q-mark{min-width:1.4em; color:var(--ok); font-weight:700; font-size:13px}
+.q-opts.is-seq .q-mark{color:var(--quiz)}
+
+/* ── Fortschritt + Ergebnis ── */
+.progress{margin-top:11px; max-width:520px}
+.bar{height:6px; background:var(--sunk); border-radius:20px; overflow:hidden;
+  border:1px solid var(--rule)}
+.fill{height:100%; width:0%; background:var(--mark); transition:width .25s}
+.progmsg{font-size:11.5px; color:var(--ink-soft); margin:8px 0 0}
+
+.result{width:100%; max-width:1100px; padding:14px; border-radius:var(--r); font-size:13px}
+.result.ok{background:var(--ok-wash); border:1px solid var(--ok)}
+.result.err{background:var(--err-wash); border:1px solid var(--err)}
+.result h4{font-size:13.5px; margin-bottom:8px}
+.result .rline{margin:3px 0; color:var(--ink); font-family:var(--num);
+  font-variant-numeric:tabular-nums; font-size:12px}
+.result .rline.quiz{color:var(--quiz); font-weight:600}
+.result .path{font-size:11px; color:var(--ink-soft); word-break:break-all;
+  margin-top:9px; font-family:var(--num)}
+.result .reveal{
+  margin-top:12px; width:100%; padding:9px; border-radius:var(--r-sm);
+  border:1px solid var(--mark); color:var(--mark); background:transparent;
+  font-weight:600; transition:background-color .12s;
+}
+.result .reveal:hover{background:var(--mark-wash)}
+.result details.skipped{margin-top:12px}
+.result details.skipped summary{cursor:pointer; color:var(--warn);
+  font-size:12px; font-weight:550}
+.result details.skipped ul{margin:8px 0 0; padding-left:18px;
+  max-height:170px; overflow:auto}
+.result details.skipped li{font-size:11.5px; color:var(--ink-soft); margin:2px 0}
+
+/* ══════════════════════════════════════════════════ Einstellungsfenster */
+.modal{
+  position:fixed; inset:0; z-index:60; display:grid; place-items:center;
+  background:rgba(10,14,20,.55); backdrop-filter:blur(3px); padding:24px;
+}
+.modal-box{
+  width:min(760px, 100%); max-height:88vh; display:flex; flex-direction:column;
+  background:var(--card); border:1px solid var(--rule-firm);
+  border-radius:var(--r-lg); box-shadow:var(--lift-3); overflow:hidden;
+}
+.modal-head{
+  display:flex; align-items:center; justify-content:space-between; gap:16px;
+  padding:15px 20px; border-bottom:1px solid var(--rule);
+}
+.modal-head h3{font-size:15px; font-weight:640}
+.modal-body{padding:6px 20px 16px; overflow-y:auto}
+/* Im Fenster stehen die Gruppen UNTEREINANDER, nicht mehr in einer Reihe:
+   hier ist Platz, und die Beschriftung bekommt eine eigene Spalte. */
+.modal-body .opt-group{
+  display:grid; grid-template-columns:110px 1fr; align-items:start;
+  gap:8px 14px; padding:14px 0; margin:0; border-left:0;
+  border-bottom:1px solid var(--rule);
+}
+.modal-body .opt-group:last-child{border-bottom:0}
+.modal-body .opt-label{padding-top:7px; margin:0}
+.opt-items{display:flex; flex-wrap:wrap; align-items:center; gap:8px}
+.modal-foot{
+  display:flex; align-items:center; justify-content:space-between; gap:16px;
+  padding:13px 20px; border-top:1px solid var(--rule); background:var(--sunk);
+}
+
+/* ═══════════════════════════════════════════════════════════ Großansicht */
+.lightbox{
+  position:fixed; inset:0; background:rgba(10,14,20,.88); display:grid;
+  place-items:center; z-index:50; cursor:zoom-out; backdrop-filter:blur(4px);
+}
+.lightbox img{max-width:84vw; max-height:82vh; border-radius:var(--r);
+  background:#fff; box-shadow:var(--lift-3)}
+.lb-cap{
+  position:absolute; bottom:24px; color:#fff; font-size:12.5px;
+  background:rgba(0,0,0,.55); padding:6px 14px; border-radius:20px;
+}
+.lb-btn{
+  position:absolute; display:grid; place-items:center; cursor:pointer;
+  background:rgba(255,255,255,.12); color:#fff;
+  border:1px solid rgba(255,255,255,.25);
+  border-radius:50%; width:46px; height:46px; font-size:24px; line-height:1;
+  transition:background-color .12s;
+}
+.lb-btn:hover{background:rgba(255,255,255,.3)}
+.lb-prev{left:24px; top:50%; transform:translateY(-50%)}
+.lb-next{right:24px; top:50%; transform:translateY(-50%)}
+.lb-close{top:20px; right:24px; width:38px; height:38px; font-size:17px}
+
+/* ═════════════════════════════════════════════════════ Schmale Fenster */
+/* Erst deutlich unter der Mindestbreite des Fensters (820 px) lohnt das
+   Stapeln — bei 820 bleiben neben der Leiste noch ~610 px fuer die Buehne. */
+@media (max-width:700px){
+  .body{flex-direction:column; overflow-y:auto}
+  .nav{width:auto; max-height:38vh; border-right:0; border-bottom:1px solid var(--rule)}
+  .stage{overflow:visible}
+  /* Gestapelt hat die Spalte keine feste Hoehe mehr; ohne eigene Proportion
+     faellt der Rahmen auf null zusammen und die Folie wird briefmarkengross. */
+  .stage-frame{
+    flex:0 0 auto; aspect-ratio:var(--slide-ratio);
+    max-width:var(--slide-w, 1024px); margin-inline:auto;
+  }
+  .cb-file{max-width:100%}
+}
+
+/* ══════════════════════════════════════════════ Reduzierte Bewegung */
+@media (prefers-reduced-motion: reduce){
+  *{animation:none !important; transition:none !important}
+}
+
+
+/* Fuß des Einstellungsfensters: eigene Version und die Suche nach neueren
+   Fassungen. Vorher lief die Prüfung nur still beim Start — wer selbst
+   nachsehen wollte, fand keine Stelle dafür. */
+.set-about{
+  display:flex; align-items:center; gap:10px; flex-wrap:wrap;
+  padding:12px 22px; border-top:1px solid var(--rule);
+}
+.upd-state{font-size:12px; color:var(--ink-soft)}
+.upd-state.is-new{color:var(--mark); font-weight:600}
+
+.primary.small{padding:6px 12px; font-size:12.5px}
+.upd-bar{flex-basis:100%; height:5px; background:var(--sunk); border:1px solid var(--rule);
+  border-radius:20px; overflow:hidden; margin-top:2px}
+.upd-bar .fill{height:100%; width:0%; background:var(--mark); transition:width .2s}

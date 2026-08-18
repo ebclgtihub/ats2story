@@ -1,0 +1,11 @@
+# Runtime-Abhängigkeiten für ats2story (.ats -> .story Konverter).
+# Dev/CI installieren damit denselben XXE-Schutz (defusedxml) wie das gebündelte App-Bundle.
+#
+# Dev-Tools (pytest, pytest-cov) stehen in pyproject.toml unter [project.optional-dependencies].dev
+# und werden mit `pip install -e '.[dev]'` gezogen.
+
+pywebview        # Desktop-App-Shell (Import-Name: webview)
+pythonnet; sys_platform == 'win32'   # pywebview zeigt sein Fenster auf Windows über .NET
+Pillow           # Bildverarbeitung (Import-Name: PIL)
+defusedxml       # XXE-/Billion-Laughs-Schutz beim Parsen von .ats-XML
+lameenc          # WAV -> MP3 Transkodierung
