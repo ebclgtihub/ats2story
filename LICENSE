@@ -1,0 +1,19 @@
+Copyright (c) 2026 EBCL
+
+Alle Rechte vorbehalten.
+
+Diese Software und ihr Quellcode dürfen eingesehen werden. Jede Nutzung,
+Vervielfältigung, Änderung oder Weitergabe — ganz oder in Teilen, im Quelltext
+oder als gebautes Programm — bedarf der vorherigen schriftlichen Zustimmung
+von EBCL.
+
+Die Software wird ohne Gewähr bereitgestellt. EBCL haftet nicht für Schäden,
+die aus ihrer Nutzung entstehen.
+
+---
+
+Diese Software bündelt Bestandteile Dritter, die eigenen Lizenzen unterliegen:
+Tesseract OCR (Apache 2.0), Leptonica (BSD 2-Clause), LAME (LGPL 2.1),
+Pillow (MIT-CMU), pywebview (BSD 3-Clause) sowie die Schriftdaten von
+tessdata_best (Apache 2.0). Die jeweiligen Lizenztexte liegen den
+Programmpaketen bei.
