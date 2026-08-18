@@ -1,0 +1,81 @@
+# macOS-Build des ATS → Storyline Converters (PyInstaller, .app).
+#
+# Tesseract wird MIT in die App gepackt — auf dem Bau-Rechner muss es dafür
+# vorhanden sein (brew), beim Benutzer nicht. Die Sprachdaten deu/pol kommen
+# aus tessdata_best, eng aus der Installation; build_macos.sh stuft sie vor.
+#
+# Ergebnis: dist/ATS Converter.app → als Artefakt hochgeladen, bei einem Tag
+# zusätzlich an das Release gehängt.
+
+name: build-macos
+
+on:
+  workflow_dispatch:        # manuell auslösbar
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write           # nötig, um Release-Dateien anzuhängen
+
+jobs:
+  build:
+    runs-on: macos-14       # Apple Silicon
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Python-Abhängigkeiten
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt pyinstaller
+
+      - name: Tesseract installieren (Bau-Zutat, wird eingepackt)
+        run: brew install tesseract tesseract-lang
+
+      - name: App bauen (stuft tessdata vor und ruft build.spec)
+        run: bash packaging/build_macos.sh
+
+      # Rekursiv statt fester Pfad: je nach PyInstaller-Fassung liegen die
+      # Beigaben unter Resources/, MacOS/ oder _internal/.
+      - name: Nachweis — Tesseract samt Sprachdaten im Paket
+        run: |
+          APP="dist/ATS Converter.app"
+          BIN=$(find "$APP" -name tesseract -type f -perm +111 | head -1)
+          test -n "$BIN" || { echo "tesseract fehlt im Paket"; exit 1; }
+          echo "gefunden: $BIN"
+          N=$(find "$APP" -name '*.traineddata' | tee /dev/stderr | wc -l)
+          test "$N" -ge 2 || { echo "Sprachdaten fehlen (nur $N)"; exit 1; }
+
+      # Unsigniert: macOS setzt beim ersten Start ein Quarantäne-Flag. Ein ZIP
+      # via ditto erhält Symlinks und Rechte im .app-Bündel — ein gewöhnliches
+      # zip zerstört sie und die App startet nicht.
+      # Ein DMG statt eines ZIP: das gewohnte Fenster, in dem man die App auf
+      # „Programme" zieht. Das ZIP bleibt zusätzlich — ditto erhält die
+      # Symlinks im Bündel, ein gewöhnliches zip zerstört sie.
+      - name: DMG bauen
+        run: |
+          STAGE=$(mktemp -d)
+          cp -R "dist/ATS Converter.app" "$STAGE/"
+          ln -s /Applications "$STAGE/Programme"
+          hdiutil create -volname "ATS Converter" -srcfolder "$STAGE" \
+            -ov -format UDZO "ATS-Converter-macOS.dmg"
+
+      - name: Bündel packen
+        run: ditto -c -k --keepParent "dist/ATS Converter.app" "ATS-Converter-macOS.zip"
+
+      - name: Artefakt hochladen
+        uses: actions/upload-artifact@v4
+        with:
+          name: ATS-Converter-macOS
+          path: ATS-Converter-macOS.zip
+
+      - name: An das Release hängen
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            ATS-Converter-macOS.dmg
+            ATS-Converter-macOS.zip

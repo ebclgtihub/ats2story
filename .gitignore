@@ -1,0 +1,60 @@
+# macOS
+.DS_Store
+**/.DS_Store
+
+# Python
+__pycache__/
+*.pyc
+
+# Test-/Coverage-Artefakte (regenerierbar)
+.coverage
+.coverage.*
+htmlcov/
+.pytest_cache/
+
+# Claude local settings
+.claude/
+
+# --- Große / proprietäre Kurs-Binärdateien (bleiben nur lokal) ---
+# Quell-Kurs (imc Content Studio)
+*.ats
+# Storyline-Projekte & Exporte
+*.story
+# Ausnahme: eingebautes Grundgerüst ist ein Programm-Asset (kein Kurs-Binär)
+!ats2story/assets/skeleton.story
+*.pptx
+*.pdf
+
+# --- imc-Exporte & Protokolle (KUNDENINHALT — niemals versionieren) ---
+# SCORM-/HTML-Pakete enthalten den vollständigen Kurs: Texte, Bilder, Audio,
+# Vorschaubilder. Die Publisher-Protokolle listen alle Folientitel.
+*.zip
+*.log
+Windows/
+# Split-Transferteile
+course_part_*
+# Render-/Vorschau-Artefakte
+*.png
+
+# Analyse-/Inspektions-Ausgaben (regenerierbar)
+_inspect/
+graphify-out/
+
+# Sprach-Korpus (Voice-Cloning) — groß & regenerierbar via ats2voice.py
+voice_corpus/
+
+# PyInstaller-Build-Artefakte (regenerierbar via packaging/build_macos.sh)
+build/
+dist/
+packaging/_tessdata_stage/
+*.spec.bak
+
+# --- ruflo / claude-flow Laufzeit + Config (nicht in den Converter-Repo) ---
+.claude-flow/
+.swarm/
+ruvector.db
+agentdb.rvf
+agentdb.rvf.lock
+.mcp.json
+CLAUDE.md
+packaging/_tessdata_best_cache/
